@@ -37,6 +37,7 @@ class StageOut(BaseModel):
 class JobOut(BaseModel):
     id: str
     status: str
+    filename: str
     error: str | None
     created_at: datetime | None
     started_at: datetime | None

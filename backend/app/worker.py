@@ -10,6 +10,7 @@ from app.migrate import upgrade_db
 from app.models import Job, JobStage, Medication
 from app.pipeline.graph import build_graph
 from app.pipeline.stages import utcnow
+from app.pipeline.tracing import configure_tracing
 
 logger = logging.getLogger("app.worker")
 POLL_SECONDS = 0.5
@@ -55,12 +56,28 @@ def run_job(job_id: str) -> None:
             return
         logger.info("job started", extra={"job_id": job_id, "stage": "parsed"})
         graph = build_graph(session)
-        graph.invoke({"job_id": job_id})
+        _invoke_graph(graph, job_id)
         logger.info("job finished", extra={"job_id": job_id, "stage": "done"})
+
+
+def _invoke_graph(graph, job_id: str) -> None:
+    config = {
+        "run_name": "formulary_verification",
+        "metadata": {"job_id": job_id},
+        "tags": ["formulary-check"],
+    }
+    if not configure_tracing():
+        graph.invoke({"job_id": job_id}, config)
+        return
+    from langsmith.run_helpers import tracing_context
+
+    with tracing_context(metadata={"job_id": job_id}, tags=["formulary-check"]):
+        graph.invoke({"job_id": job_id}, config)
 
 
 def main() -> None:
     configure_logging()
+    configure_tracing()
     upgrade_db()
     with SessionLocal() as session:
         requeue_orphaned(session)

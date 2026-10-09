@@ -15,7 +15,7 @@ from app.pipeline.llm import (
     complete,
     embed_texts,
 )
-from app.pipeline.parse import format_pages, read_document
+from app.pipeline.parse import format_pages, medications_in_tables, read_document
 from app.pipeline.retrieve import passages_for_medication
 from app.pipeline.stages import run_stage, utcnow
 from app.pipeline.verify import FlagDecision, Passage, verify_one
@@ -35,13 +35,23 @@ POINTS_SYSTEM = (
 )
 ENTITY_SYSTEM = (
     "Extract every prescribed medication from this discharge document. "
+    "Medication lists are often tables. Read every table column, not only the surrounding paragraphs. "
     "Return drug name, dose, unit, route, frequency, duration, indication, and the source page number. "
+    "Split a combined route and frequency such as 'PO once daily' into route PO and frequency once daily. "
     "Use null for any field the document does not state. Do not infer medications that are not prescribed."
 )
 VERIFY_SYSTEM = (
     "You verify one prescription against the institutional formulary passages provided. "
-    "supported means a monograph exists and dose, frequency, duration, route, and timing match it. "
-    "contradicted means a monograph exists but at least one of those parameters conflicts with it. "
+    "The prescription fields below are the extracted values. Compare those values. "
+    "Never describe a field as missing when it contains a value. "
+    "supported means a monograph exists and the stated dose, route, frequency, timing, and duration agree with it. "
+    "A dose equal to the standard adult dose is supported. "
+    "A dose above the stated maximum is contradicted. "
+    "A dose other than the standard adult dose is contradicted unless the prescription documents a titration the monograph allows. "
+    "An administration time the monograph forbids, such as morning instead of bedtime, is contradicted. "
+    "A duration longer than the monograph allows is contradicted. "
+    "A duration that matches a required reassessment point is supported. "
+    "contradicted means a monograph exists but at least one stated parameter conflicts. "
     "unsupported means the passages do not contain a monograph for this medication. "
     "citation_quote must be copied from one passage. Do not use knowledge from outside the passages."
 )
@@ -133,10 +143,16 @@ def build_nodes(session: Session):
 
     def entities(state: dict) -> dict:
         def work() -> dict:
-            result = complete(ENTITY_SYSTEM, format_pages(state["pages"]), MedicationsResult)
+            document = session.get(Job, state["job_id"]).document
+            table_rows = medications_in_tables(Path(document.storage_path))
+            if table_rows:
+                extracted = [MedicationResult(**row) for row in table_rows]
+                logger.info("extracted medications from table", extra={"job_id": state["job_id"], "stage": "entities"})
+            else:
+                extracted = complete(ENTITY_SYSTEM, format_pages(state["pages"]), MedicationsResult).medications
             job_id = state["job_id"]
             session.execute(delete(Medication).where(Medication.job_id == job_id))
-            for item in result.medications:
+            for item in extracted:
                 if not item.drug_name.strip():
                     continue
                 session.add(_medication(job_id, item))
@@ -233,11 +249,11 @@ def _ask_verdict(medication: Medication, passages: list[Passage]) -> FlagDecisio
     )
     medication_text = (
         f"Drug: {medication.drug_name}\n"
-        f"Dose: {medication.dose} {medication.unit or ''}\n"
-        f"Route: {medication.route}\n"
-        f"Frequency: {medication.frequency}\n"
-        f"Duration: {medication.duration}\n"
-        f"Indication: {medication.indication}"
+        f"Dose: {_stated(medication.dose, medication.unit)}\n"
+        f"Route: {_stated(medication.route)}\n"
+        f"Frequency: {_stated(medication.frequency)}\n"
+        f"Duration: {_stated(medication.duration)}\n"
+        f"Indication: {_stated(medication.indication)}"
     )
     result = complete(
         VERIFY_SYSTEM,
@@ -267,6 +283,11 @@ def _replace_flag(session: Session, medication: Medication, decision: FlagDecisi
             citation_page=decision.citation_page,
         )
     )
+
+
+def _stated(*values: str | None) -> str:
+    text = " ".join(value.strip() for value in values if value and value.strip())
+    return text or "not stated"
 
 
 def _blank(value: str | None) -> str | None:

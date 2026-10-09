@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Chunk
+from app.pipeline.tracing import configure_tracing
 from app.pipeline.verify import Passage
 
 TOP_K = 4
@@ -51,19 +52,27 @@ class VerdictResult(BaseModel):
 def _client() -> OpenAI:
     if not settings.openai_api_key:
         raise RuntimeError("OPENAI_API_KEY is not set")
-    return OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key)
+    if not configure_tracing():
+        return client
+    from langsmith.wrappers import wrap_openai
+
+    return wrap_openai(client)
 
 
 def complete(system: str, user: str, schema: type[BaseModel]) -> BaseModel:
-    response = _client().beta.chat.completions.parse(
-        model=settings.openai_chat_model,
-        temperature=0,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        response_format=schema,
-    )
+    from langsmith import trace
+
+    with trace(name=schema.__name__, run_type="chain"):
+        response = _client().beta.chat.completions.parse(
+            model=settings.openai_chat_model,
+            temperature=0,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            response_format=schema,
+        )
     parsed = response.choices[0].message.parsed
     if parsed is None:
         raise RuntimeError("The model returned no structured result")
@@ -73,7 +82,10 @@ def complete(system: str, user: str, schema: type[BaseModel]) -> BaseModel:
 def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
-    response = _client().embeddings.create(model=settings.openai_embedding_model, input=texts)
+    from langsmith import trace
+
+    with trace(name="embed_texts", run_type="embedding", inputs={"count": len(texts)}):
+        response = _client().embeddings.create(model=settings.openai_embedding_model, input=texts)
     ordered = sorted(response.data, key=lambda item: item.index)
     return [item.embedding for item in ordered]
 

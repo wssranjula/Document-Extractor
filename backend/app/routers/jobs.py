@@ -45,6 +45,7 @@ def to_job_out(job: Job) -> JobOut:
     return JobOut(
         id=job.id,
         status=job.status,
+        filename=job.document.filename,
         error=job.error,
         created_at=job.created_at,
         started_at=job.started_at,
@@ -113,7 +114,7 @@ def create_job(
 @router.get("", response_model=list[JobOut])
 def list_jobs(user: User = Depends(get_current_user), session: Session = Depends(get_db)) -> list[JobOut]:
     jobs = session.scalars(
-        select(Job).where(Job.user_id == user.id).options(selectinload(Job.stages)).order_by(Job.created_at.desc())
+        select(Job).where(Job.user_id == user.id).options(selectinload(Job.stages), selectinload(Job.document)).order_by(Job.created_at.desc())
     ).all()
     return [to_job_out(job) for job in jobs]
 

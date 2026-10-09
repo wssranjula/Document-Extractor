@@ -1,6 +1,6 @@
-# Document Verification API
+# Formulary Check
 
-Backend for checking a hospital discharge summary against an institutional formulary. A job returns immediately, then a worker runs one fixed LangGraph workflow.
+A discharge summary is checked against an institutional formulary. The React app accepts the file immediately, and a worker runs one fixed LangGraph workflow.
 
 ## Setup
 
@@ -14,6 +14,8 @@ On macOS or Linux, use `cp .env.example .env` instead.
 
 Put your OpenAI key in `.env` as `OPENAI_API_KEY`.
 
+Put your LangSmith key in `.env` as `LANGSMITH_API_KEY` and set `LANGSMITH_TRACING=true`. Each job is one trace in the `formulary-check` project at [smith.langchain.com](https://smith.langchain.com): the LangGraph stages, the summary, the critical points, each medication verdict, and the embedding calls. Restart the worker after changing `.env`.
+
 ```bash
 docker compose up --build
 ```
@@ -24,14 +26,26 @@ In a second terminal:
 docker compose exec api python -m app.seed
 ```
 
-The API is at `http://localhost:8000`. Interactive docs are at `http://localhost:8000/docs`.
+Open the app at `http://localhost:8080`.
 
 Reviewer login, already created by the seed command:
 
 - Email: `reviewer@example.com`
 - Password: `Reviewer123!`
 
-Upload `primary_document_medical.docx` with the seeded reference id from `GET /references`.
+Upload `primary_document_medical.docx`. The seeded formulary is already selected.
+
+The API remains at `http://localhost:8000`. Interactive docs are at `http://localhost:8000/docs`.
+
+To work on the UI locally, with the API running on port 8000:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The dev server is at `http://localhost:5173` and proxies `/api` to the backend.
 
 Run the tests from `backend` after `pip install -r requirements.txt`:
 
@@ -50,7 +64,7 @@ The worker claims the oldest queued job and runs this sequence:
 
 `GET /jobs/{id}/events` is a server-sent event stream of those stages. `GET /jobs/{id}/result` returns the summary, critical points, medications, and flags after the job succeeds.
 
-Only the formulary is embedded. The discharge summary is parsed and sent to the model as page-labeled text. Chunk and embed stages finish immediately when that formulary was indexed by an earlier job.
+Only the formulary is embedded. The discharge summary is parsed, including Word tables, and sent to the model as page-labeled text. A medication table is read directly so dose, route, and frequency are kept. A document without that table still uses the model for extraction. Chunk and embed stages finish immediately when that formulary was indexed by an earlier job.
 
 ## API
 
