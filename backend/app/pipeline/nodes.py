@@ -18,7 +18,7 @@ from app.pipeline.llm import (
 from app.pipeline.parse import format_pages, medications_in_tables, read_document
 from app.pipeline.retrieve import passages_for_medication
 from app.pipeline.stages import run_stage, utcnow
-from app.pipeline.verify import FlagDecision, Passage, verify_one
+from app.pipeline.verify import FlagDecision, Passage, remove_unsupported_duration_conflict, verify_one
 
 logger = logging.getLogger("app.pipeline")
 
@@ -29,7 +29,9 @@ SUMMARY_SYSTEM = (
 )
 POINTS_SYSTEM = (
     "Extract critical points a patient must not miss from this discharge document. "
-    "Examples are a required dose time, a duration limit, a side effect to report, or a follow-up. "
+    "Rank duration limits, stop rules, and serious effects requiring action first; "
+    "then administration timing and do-not-stop instructions; then time-bound follow-up and labs; "
+    "then expected non-urgent effects and general counseling. "
     "Every point must quote a phrase that appears in the document. Do not invent recommendations. "
     "Order the list with the most important point first."
 )
@@ -51,6 +53,8 @@ VERIFY_SYSTEM = (
     "An administration time the monograph forbids, such as morning instead of bedtime, is contradicted. "
     "A duration longer than the monograph allows is contradicted. "
     "A duration that matches a required reassessment point is supported. "
+    "If the formulary does not state a maximum duration, an open-ended duration such as 'continue indefinitely' "
+    "is not a contradiction. Never invent a duration limit from the absence of one. "
     "contradicted means a monograph exists but at least one stated parameter conflicts. "
     "unsupported means the passages do not contain a monograph for this medication. "
     "citation_quote must be copied from one passage. Do not use knowledge from outside the passages."
@@ -170,6 +174,8 @@ def build_nodes(session: Session):
             for medication in medications:
                 passages = _passages_for(session, reference_id, medication)
                 verdict = _ask_verdict(medication, passages)
+                if verdict is not None:
+                    verdict = remove_unsupported_duration_conflict(medication.duration, passages, verdict)
                 decision = verify_one(passages, verdict)
                 _replace_flag(session, medication, decision)
             session.commit()

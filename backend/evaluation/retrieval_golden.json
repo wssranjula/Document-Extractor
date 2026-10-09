@@ -1,0 +1,23 @@
+[
+  {"query": "Velantine", "relevant_sections": ["Velantine"]},
+  {"query": "velantine", "relevant_sections": ["Velantine"]},
+  {"query": "Cordizem XR", "relevant_sections": ["Cordizem-XR"]},
+  {"query": "CordizemXR", "relevant_sections": ["Cordizem-XR"]},
+  {"query": "Cordizim-XR", "relevant_sections": ["Cordizem-XR"]},
+  {"query": "Pravoxil", "relevant_sections": ["Pravoxil"]},
+  {"query": "Etrazolam", "relevant_sections": ["Etrazolam"]},
+  {"query": "Quintaxin", "relevant_sections": ["Quintaxin"]},
+  {"query": "Mirosartan", "relevant_sections": ["Mirosartan"]},
+  {"query": "Sumavast", "relevant_sections": ["Sumavast"]},
+  {"query": "Floranase", "relevant_sections": ["Floranase"]},
+  {
+    "query": "acid reflux prophylaxis medicine taken before breakfast",
+    "relevant_sections": ["Quintaxin"]
+  },
+  {
+    "query": "stroke prevention medicine for atrial fibrillation",
+    "relevant_sections": ["Sumavast"]
+  },
+  {"query": "Pranixol", "relevant_sections": []},
+  {"query": "NotAFormularyDrug", "relevant_sections": []}
+]

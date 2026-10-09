@@ -98,13 +98,35 @@ Each flag status is `supported`, `contradicted`, or `unsupported`. A flag includ
 
 The worker claims jobs with `FOR UPDATE SKIP LOCKED`.
 
+## Critical-point ranking
+
+A critical point is a patient instruction from the primary document whose omission could change how a medicine is taken or delay required care. The model ranks candidates in this order:
+
+1. Duration limits, stop rules, and serious side effects that require action.
+2. Required administration timing and instructions not to stop a medicine abruptly.
+3. Time-bound clinical follow-up and laboratory monitoring.
+4. Expected, non-urgent adverse effects and general counseling.
+
+Every point must include an exact quote from the primary document. The backend drops a point when that quote is not found, so the list cannot introduce new clinical advice.
+
+## Retrieval evaluation
+
+`backend/evaluation/retrieval_golden.json` is a small versioned golden set containing exact names, punctuation and spelling variants, semantic descriptions, and drugs that are absent from the formulary. Run it after the reference has been indexed:
+
+```bash
+cd backend
+python -m evaluation.evaluate_retrieval
+```
+
+The report includes micro precision, recall, Precision@1, mean reciprocal rank (MRR), and the unsupported-query rejection rate. Precision measures how many returned monographs are relevant; recall measures how many expected monographs were found. Precision@1 and MRR expose ranking problems, while unsupported rejection catches unrelated passages returned for absent drugs. The checked-in 15-query set currently scores 1.000 on all five metrics. This is a development sanity set, not evidence of production quality. For a production set, clinicians would label de-identified medication queries and relevant monographs, and CI would compare these metrics with a checked-in baseline before retrieval changes are accepted.
+
 ## Decisions
 
 The workflow is a straight LangGraph graph because every document takes the same steps. Verification loops over the extracted medications in ordinary Python. A later use case would be a new graph that reuses parsing, pgvector search, and the job runner.
 
 The formulary is split on Heading 2, so each drug monograph is one chunk. The quick-reference section is a separate chunk. Embeddings use `text-embedding-3-small`. Chat uses `gpt-4o-mini`. Both names are set in `.env`.
 
-Retrieval looks up the extracted drug name against monograph titles first. `Cordizem XR` matches the chunk titled `Cordizem-XR` because punctuation and case are ignored. A single close spelling, such as a missing letter, uses that monograph too. Vector search runs only when no title matches: the medication name, dose, route, frequency, duration, and indication are embedded, and the closest four chunks within a cosine distance of 0.55 are kept. The verdict quote must appear in a retrieved passage; otherwise the flag is `unsupported` and has no citation. Critical points are kept only when their quote appears in the primary document.
+Retrieval looks up the extracted drug name against monograph titles first. `Cordizem XR` matches the chunk titled `Cordizem-XR` because punctuation and case are ignored. A single insertion, deletion, or substitution can use that monograph too. A short unknown drug name is rejected instead of being semantically matched to a similarly spelled but different drug; this prevents `Pranixol` from retrieving `Pravoxil`. Longer descriptive queries use vector search: the closest four chunks within a cosine distance of 0.55 are kept. The verdict quote must appear in a retrieved passage; otherwise the flag is `unsupported` and has no citation. Critical points are kept only when their quote appears in the primary document.
 
 The upload transaction contains the document row, the job row, and the eight stage rows. The file is written first and deleted if that transaction rolls back.
 
@@ -114,9 +136,16 @@ Logs are JSON lines with `job_id` and `stage`.
 
 - A Velantine dose above the monograph maximum is stored as `contradicted` and keeps the formulary quote.
 - No retrieved passage is stored as `unsupported` with an empty citation.
+- An open-ended prescription is not treated as a duration conflict when the monograph states no duration limit.
+- A real dose conflict is preserved when an unsupported duration claim is removed.
 - One user receives 404 for another user's job, result, and file.
 - The sample formulary splits into the eight monographs plus the quick-reference section.
 - `Cordizem XR` resolves to the `Cordizem-XR` monograph by title, without a vector search.
+- Retrieval metric calculations include false-positive passages and unsupported queries.
+
+## Extra credit
+
+LangSmith tracing is included for job-level LangGraph, model, and embedding traces. Deep-linking into the rendered reference and duplicate-upload detection were not attempted.
 
 ## Known limits
 

@@ -1,6 +1,5 @@
 import logging
 import re
-from difflib import SequenceMatcher
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,6 +21,9 @@ def passages_for_medication(session: Session, reference_id: str, medication: Med
     if named:
         logger.info("matched monograph by name", extra={"stage": "verified"})
         return named
+    if len(medication.drug_name.split()) <= 3:
+        logger.info("unknown drug name; skipping semantic fallback", extra={"stage": "verified"})
+        return []
     logger.info("no monograph title match; using vector search", extra={"stage": "verified"})
     query = " ".join(
         part
@@ -66,9 +68,31 @@ def normalize_name(value: str) -> str:
 def _names_are_close(left: str, right: str) -> bool:
     if len(left) < 5 or len(right) < 5:
         return False
-    if left in right or right in left:
-        return True
-    return SequenceMatcher(None, left, right).ratio() >= 0.9
+    if abs(len(left) - len(right)) > 1:
+        return False
+    return _edit_distance_at_most_one(left, right)
+
+
+def _edit_distance_at_most_one(left: str, right: str) -> bool:
+    if len(left) > len(right):
+        left, right = right, left
+    if len(right) - len(left) > 1:
+        return False
+    edits = 0
+    left_index = 0
+    right_index = 0
+    while left_index < len(left) and right_index < len(right):
+        if left[left_index] == right[right_index]:
+            left_index += 1
+            right_index += 1
+            continue
+        edits += 1
+        if edits > 1:
+            return False
+        if len(left) == len(right):
+            left_index += 1
+        right_index += 1
+    return True
 
 
 def _passage(chunk: Chunk) -> Passage:

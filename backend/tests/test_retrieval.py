@@ -39,16 +39,29 @@ def test_punctuation_variant_uses_the_named_monograph_without_vectors(client, mo
     assert [passage.section for passage in passages] == ["Cordizem-XR"]
 
 
-def test_unknown_name_falls_back_to_vector_search(client, monkeypatch):
-    monkeypatch.setattr("app.pipeline.retrieve.embed_texts", lambda _texts: [[0.1, 0.2]])
-    monkeypatch.setattr(
-        "app.pipeline.retrieve.search_passages",
-        lambda _session, _reference_id, _vector: [],
-    )
+def test_unknown_drug_name_does_not_match_a_similar_monograph(client, monkeypatch):
+    def fail_embed(_texts):
+        raise AssertionError("a short unknown drug name must not use semantic fallback")
+
+    monkeypatch.setattr("app.pipeline.retrieve.embed_texts", fail_embed)
     reference_id, medication_id = _reference_with_monographs()
     with SessionLocal() as session:
         medication = session.get(Medication, medication_id)
-        medication.drug_name = "NotAFormularyDrug"
+        medication.drug_name = "Pranixol"
         passages = passages_for_medication(session, reference_id, medication)
 
     assert passages == []
+
+
+def test_one_character_typo_uses_the_named_monograph(client, monkeypatch):
+    def fail_embed(_texts):
+        raise AssertionError("a one-character title typo should not use vector search")
+
+    monkeypatch.setattr("app.pipeline.retrieve.embed_texts", fail_embed)
+    reference_id, medication_id = _reference_with_monographs()
+    with SessionLocal() as session:
+        medication = session.get(Medication, medication_id)
+        medication.drug_name = "Cordizim-XR"
+        passages = passages_for_medication(session, reference_id, medication)
+
+    assert [passage.section for passage in passages] == ["Cordizem-XR"]
