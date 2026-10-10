@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 
 from sqlalchemy import delete, select, update
@@ -9,11 +10,13 @@ from app.logging_config import configure_logging
 from app.migrate import upgrade_db
 from app.models import Job, JobStage, Medication
 from app.pipeline.graph import build_graph
+from app.pipeline.recovery import fail_running_job
 from app.pipeline.stages import utcnow
 from app.pipeline.tracing import configure_tracing
 
 logger = logging.getLogger("app.worker")
 POLL_SECONDS = 0.5
+HEARTBEAT_SECONDS = 5
 
 
 def claim_job(session: Session) -> Job | None:
@@ -22,8 +25,10 @@ def claim_job(session: Session) -> Job | None:
     )
     if job is None:
         return None
+    now = utcnow()
     job.status = "running"
-    job.started_at = utcnow()
+    job.started_at = now
+    job.heartbeat_at = now
     job.error = None
     session.commit()
     return job
@@ -37,7 +42,15 @@ def requeue_orphaned(session: Session) -> None:
     session.execute(
         update(Job)
         .where(Job.id.in_(job_ids))
-        .values(status="queued", error=None, summary=None, critical_points=None, started_at=None, finished_at=None)
+        .values(
+            status="queued",
+            error=None,
+            summary=None,
+            critical_points=None,
+            started_at=None,
+            heartbeat_at=None,
+            finished_at=None,
+        )
     )
     session.execute(
         update(JobStage)
@@ -50,14 +63,33 @@ def requeue_orphaned(session: Session) -> None:
 
 
 def run_job(job_id: str) -> None:
-    with SessionLocal() as session:
-        job = session.get(Job, job_id)
-        if job is None:
-            return
-        logger.info("job started", extra={"job_id": job_id, "stage": "parsed"})
-        graph = build_graph(session)
-        _invoke_graph(graph, job_id)
-        logger.info("job finished", extra={"job_id": job_id, "stage": "done"})
+    stop = threading.Event()
+    beater = threading.Thread(target=_heartbeat, args=(job_id, stop), name=f"heartbeat-{job_id}", daemon=True)
+    beater.start()
+    try:
+        with SessionLocal() as session:
+            job = session.get(Job, job_id)
+            if job is None:
+                return
+            logger.info("job started", extra={"job_id": job_id, "stage": "parsed"})
+            graph = build_graph(session)
+            _invoke_graph(graph, job_id)
+            logger.info("job finished", extra={"job_id": job_id, "stage": "done"})
+    finally:
+        stop.set()
+
+
+def _heartbeat(job_id: str, stop: threading.Event) -> None:
+    while not stop.wait(HEARTBEAT_SECONDS):
+        try:
+            with SessionLocal() as session:
+                job = session.get(Job, job_id)
+                if job is None or job.status != "running":
+                    return
+                job.heartbeat_at = utcnow()
+                session.commit()
+        except Exception:
+            logger.exception("heartbeat failed", extra={"job_id": job_id, "stage": "done"})
 
 
 def _invoke_graph(graph, job_id: str) -> None:
@@ -92,6 +124,8 @@ def main() -> None:
             run_job(job_id)
         except Exception:
             logger.exception("job failed", extra={"job_id": job_id, "stage": "done"})
+            with SessionLocal() as session:
+                fail_running_job(session, job_id, "Verification stopped unexpectedly.")
 
 
 if __name__ == "__main__":

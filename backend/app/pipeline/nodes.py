@@ -186,7 +186,10 @@ def build_nodes(session: Session):
 
     def done(state: dict) -> dict:
         def work() -> dict:
+            session.expire_all()
             job = session.get(Job, state["job_id"])
+            if job is None or job.status != "running":
+                return {}
             job.status = "succeeded"
             job.error = None
             job.finished_at = utcnow()

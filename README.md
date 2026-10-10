@@ -33,7 +33,7 @@ Reviewer login, already created by the seed command:
 - Email: `reviewer@example.com`
 - Password: `Reviewer123!`
 
-Upload `primary_document_medical.docx`. The seeded formulary is already selected.
+Upload `primary_document_medical.docx`. The seeded formulary is already selected. Additional DOCX formularies can be added from **Add formulary** in the application header; each drug monograph must use the Heading 2 style.
 
 The API remains at `http://localhost:8000`. Interactive docs are at `http://localhost:8000/docs`.
 
@@ -74,6 +74,7 @@ Only the formulary is embedded. The discharge summary is parsed, including Word 
 | POST | `/auth/login` | Return a JWT |
 | GET | `/auth/me` | Current user |
 | GET | `/references` | Formularies the user can select |
+| POST | `/references` | Upload a DOCX formulary |
 | POST | `/jobs` | Upload a PDF or DOCX and a `reference_id` |
 | GET | `/jobs` | The current user's jobs |
 | GET | `/jobs/{id}` | Status and stage timings |
@@ -151,6 +152,6 @@ LangSmith tracing is included for job-level LangGraph, model, and embedding trac
 
 Page numbers in a DOCX exist when the file contains page breaks. Otherwise the text is page 1 and the citation uses the monograph section name.
 
-A worker that dies mid-job leaves that job `running`. The next worker start queues it again and reruns it.
+A worker updates a heartbeat while a job is running. If that heartbeat is older than 45 seconds, the next status read marks the job failed instead of leaving it running. Restarting the worker still requeues a job that is running at startup.
 
 Duplicate upload detection and a second workflow are not in this version.

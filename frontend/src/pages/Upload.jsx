@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { listJobs, listReferences, createJob } from "../api";
-import { OPTIMISTIC_STAGES, Pipeline } from "../Pipeline";
+import { acceptingStages, forgetPendingCheck, loadPendingCheck, rememberPendingCheck } from "../Pipeline";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
@@ -14,17 +14,24 @@ export function UploadPage() {
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [dragging, setDragging] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [pendingCheck, setPendingCheck] = useState(() => loadPendingCheck());
+  const location = useLocation();
+  const submitted = useRef(false);
 
   useEffect(() => {
     Promise.all([listReferences(), listJobs()])
       .then(([refs, existing]) => {
         setReferences(refs);
         setJobs(existing);
-        if (refs[0]) setReferenceId(refs[0].id);
+        const preferred = refs.find((reference) => reference.id === location.state?.referenceId);
+        if (preferred || refs[0]) setReferenceId((preferred || refs[0]).id);
       })
       .catch((err) => setLoadError(err.message));
-  }, []);
+  }, [location.state?.referenceId]);
+
+  useEffect(() => {
+    if (location.state?.uploadError) setError(location.state.uploadError);
+  }, [location.state]);
 
   function chooseFile(next) {
     setError("");
@@ -41,8 +48,9 @@ export function UploadPage() {
     setFile(next);
   }
 
-  async function onSubmit(event) {
+  function onSubmit(event) {
     event.preventDefault();
+    if (submitted.current) return;
     if (!file) {
       setError("Choose a discharge summary first.");
       return;
@@ -51,34 +59,40 @@ export function UploadPage() {
       setError("Choose a formulary first.");
       return;
     }
-    setSending(true);
-    try {
-      const job = await createJob(file, referenceId);
-      navigate(`/jobs/${job.job_id}`);
-    } catch (err) {
-      setError(err.message);
-      setSending(false);
-    }
+    submitted.current = true;
+    const filename = file.name;
+    const selectedFile = file;
+    const selectedReference = referenceId;
+    const stages = acceptingStages();
+    const pending = { id: "pending", filename, status: "queued", stages };
+    rememberPendingCheck(pending);
+    setPendingCheck(pending);
+    navigate("/jobs/pending", { state: pending });
+    createJob(selectedFile, selectedReference)
+      .then((job) => {
+        forgetPendingCheck();
+        navigate(`/jobs/${job.job_id}`, { replace: true, state: { filename } });
+      })
+      .catch((err) => {
+        forgetPendingCheck();
+        submitted.current = false;
+        navigate("/", { replace: true, state: { uploadError: err.message } });
+      });
   }
 
-  if (sending) {
-    return (
-      <section>
-        <h1>{file.name}</h1>
-        <p className="lede">The document is on its way. These stages are shown before the server finishes accepting the file.</p>
-        <Pipeline stages={OPTIMISTIC_STAGES} />
-      </section>
-    );
-  }
+  const visibleJobs = pendingCheck ? [pendingCheck, ...(jobs || [])] : jobs;
 
   return (
     <div className="upload-layout">
       <section>
         <h1>Check a discharge summary</h1>
-        <p className="lede">The file is accepted immediately. Verification continues on the next screen.</p>
+        <p className="lede">The check opens immediately. The file is accepted while the first stage is already on screen.</p>
+        {location.state?.referenceAdded ? <p className="banner success">{location.state.referenceAdded}</p> : null}
         {loadError ? <p className="banner error">{loadError}</p> : null}
         {references && references.length === 0 ? (
-          <p className="banner empty">No formulary is loaded yet. Run the seed command, then refresh this page.</p>
+          <p className="banner empty">
+            No formulary is loaded yet. <Link to="/references/new">Add one now.</Link>
+          </p>
         ) : null}
         <form className="card" onSubmit={onSubmit}>
           <label
@@ -107,13 +121,17 @@ export function UploadPage() {
             {references === null ? (
               <span className="hint">Loading formularies…</span>
             ) : (
-              <select value={referenceId} onChange={(event) => setReferenceId(event.target.value)}>
-                {references.map((reference) => (
-                  <option key={reference.id} value={reference.id}>
-                    {reference.name}
-                  </option>
-                ))}
-              </select>
+              <>
+                <select value={referenceId} onChange={(event) => setReferenceId(event.target.value)}>
+                  {references.map((reference) => (
+                    <option key={reference.id} value={reference.id}>
+                      {reference.name}
+                      {reference.indexed ? " · indexed" : " · not indexed yet"}
+                    </option>
+                  ))}
+                </select>
+                <span className="hint"><Link to="/references/new">Add another formulary</Link></span>
+              </>
             )}
           </label>
           {error ? <p className="banner error">{error}</p> : null}
@@ -123,9 +141,9 @@ export function UploadPage() {
       <aside className="card jobs">
         <h2>Recent checks</h2>
         {jobs === null ? <p className="hint">Loading…</p> : null}
-        {jobs && jobs.length === 0 ? <p className="hint">No documents yet.</p> : null}
+        {visibleJobs && visibleJobs.length === 0 ? <p className="hint">No documents yet.</p> : null}
         <ul>
-          {(jobs || []).map((job) => (
+          {(visibleJobs || []).map((job) => (
             <li key={job.id}>
               <Link to={`/jobs/${job.id}`}>{job.filename}</Link>
               <span className={`status ${job.status}`}>{job.status}</span>

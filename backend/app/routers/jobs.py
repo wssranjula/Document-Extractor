@@ -20,12 +20,14 @@ from app.schemas import (
     MedicationOut,
     StageOut,
 )
+from app.pipeline.recovery import fail_stale_jobs
 from app.storage import ALLOWED_EXTENSIONS, MAX_UPLOAD_BYTES, delete_file, save_upload
 
 router = APIRouter()
 
 
 def get_owned_job(session: Session, job_id: str, user_id: str) -> Job:
+    fail_stale_jobs(session)
     job = session.scalar(
         select(Job)
         .where(Job.id == job_id, Job.user_id == user_id)
@@ -113,6 +115,7 @@ def create_job(
 
 @router.get("", response_model=list[JobOut])
 def list_jobs(user: User = Depends(get_current_user), session: Session = Depends(get_db)) -> list[JobOut]:
+    fail_stale_jobs(session)
     jobs = session.scalars(
         select(Job).where(Job.user_id == user.id).options(selectinload(Job.stages), selectinload(Job.document)).order_by(Job.created_at.desc())
     ).all()
@@ -185,6 +188,7 @@ async def _event_stream(job_id: str, user_id: str):
     ticks = 0
     while True:
         with SessionLocal() as session:
+            fail_stale_jobs(session)
             job = session.scalar(select(Job).where(Job.id == job_id, Job.user_id == user_id).options(selectinload(Job.stages)))
             if job is None:
                 yield _sse("failed", {"job_id": job_id, "status": "failed"})

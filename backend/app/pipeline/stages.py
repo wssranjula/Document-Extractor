@@ -21,8 +21,17 @@ def run_stage(session: Session, job_id: str, name: str, work):
     except Exception as exc:
         _set_failed(session, job_id, name, exc)
         raise
+    if _abandoned(session, job_id):
+        return result
     _set_succeeded(session, job_id, name)
     return result
+
+
+def _abandoned(session: Session, job_id: str) -> bool:
+    """A recovered job is already failed. A finished job is still allowed to close its stage."""
+    session.expire_all()
+    job = session.get(Job, job_id)
+    return job is None or job.status == "failed"
 
 
 def _stage(session: Session, job_id: str, name: str) -> JobStage:

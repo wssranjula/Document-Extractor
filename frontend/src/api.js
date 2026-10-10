@@ -60,6 +60,13 @@ export function listReferences() {
   return request("/references");
 }
 
+export function createReference(name, file) {
+  const body = new FormData();
+  body.append("name", name);
+  body.append("file", file);
+  return request("/references", { method: "POST", body });
+}
+
 export function listJobs() {
   return request("/jobs");
 }

@@ -34,9 +34,15 @@ export function DocumentPane({ jobId }) {
     };
   }, [jobId]);
 
-  if (loading) return <p className="hint">Loading the document…</p>;
-  if (error) return <p className="banner error">{error}</p>;
-  if (!file) return <p className="banner empty">The document file is empty.</p>;
+  if (loading || error || !file) {
+    return (
+      <div className="sheet">
+        {loading ? <p className="hint">Loading the document…</p> : null}
+        {error ? <p className="banner error">{error}</p> : null}
+        {!loading && !error ? <p className="banner empty">The document file is empty.</p> : null}
+      </div>
+    );
+  }
   if (file.type.includes("pdf")) return <PdfView blob={file.blob} />;
   return <DocxView blob={file.blob} />;
 }

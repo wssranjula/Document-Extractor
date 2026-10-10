@@ -17,6 +17,41 @@ export const OPTIMISTIC_STAGES = Object.keys(LABELS).map((name) => ({
   error: null,
 }));
 
+const PENDING_KEY = "pending-check";
+
+export function acceptingStages() {
+  const started = new Date().toISOString();
+  return OPTIMISTIC_STAGES.map((stage, index) =>
+    index === 0 ? { ...stage, status: "running", started_at: started } : { ...stage },
+  );
+}
+
+export function rememberPendingCheck(check) {
+  sessionStorage.setItem(PENDING_KEY, JSON.stringify(check));
+}
+
+export function forgetPendingCheck() {
+  sessionStorage.removeItem(PENDING_KEY);
+}
+
+export function loadPendingCheck() {
+  try {
+    const raw = sessionStorage.getItem(PENDING_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function completedStages(stages, status, finishedAt) {
+  if (status !== "succeeded") return stages || [];
+  return (stages || []).map((stage) =>
+    stage.name === "done" && stage.status !== "failed"
+      ? { ...stage, status: "succeeded", finished_at: stage.finished_at || finishedAt || null }
+      : stage,
+  );
+}
+
 export function Pipeline({ stages }) {
   return (
     <ol className="pipeline">
