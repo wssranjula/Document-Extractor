@@ -160,7 +160,7 @@ function ReferenceList({ references, error }) {
       <div className="section-title">
         <div>
           <h2>Uploaded formularies</h2>
-          <p className="hint">Files become ready after their first document check builds the search index.</p>
+          <p className="hint">Saved means the file is stored. Indexed means a document check has built its search index.</p>
         </div>
         {references ? <span className="count-badge">{references.length}</span> : null}
       </div>
@@ -172,11 +172,15 @@ function ReferenceList({ references, error }) {
           {references.map((reference) => (
             <li key={reference.id} className="card">
               <div>
+                <span className="hint">Name</span>
                 <strong>{reference.name}</strong>
+              </div>
+              <div>
+                <span className="hint">File</span>
                 <span>{reference.filename}</span>
               </div>
-              <span className={`reference-status ${reference.indexed ? "ready" : "waiting"}`}>
-                {reference.indexed ? "Ready" : "Not indexed yet"}
+              <span className={`reference-status ${reference.indexed ? "ready" : "saved"}`}>
+                {reference.indexed ? "Indexed" : "Saved"}
               </span>
             </li>
           ))}

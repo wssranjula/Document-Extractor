@@ -181,19 +181,24 @@ form.card { display: grid; gap: 14px; }
 
 .reference-list { margin-top: 28px; }
 .reference-list ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
-.reference-list li { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.reference-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+}
 .reference-list li > div { min-width: 0; display: grid; gap: 2px; }
 .reference-list li strong, .reference-list li span { overflow-wrap: anywhere; }
-.reference-list li > div span { color: #65717d; font-size: 0.88rem; }
+.reference-list .hint { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .reference-status {
-  flex: 0 0 auto;
+  justify-self: end;
   border-radius: 999px;
   padding: 3px 9px;
   font-size: 0.8rem;
   font-weight: 700;
 }
 .reference-status.ready { background: #e5f6ea; color: #146c36; }
-.reference-status.waiting { background: #fff4d6; color: #8a5a2a; }
+.reference-status.saved { background: #edf1f2; color: #52606c; }
 
 .dropzone {
   border: 1.5px dashed #0c5c5c;
@@ -401,7 +406,8 @@ cite { display: block; color: #5c6570; font-style: normal; font-size: 0.8rem; }
 }
 
 @media (max-width: 800px) {
-  .upload-layout, .review { grid-template-columns: minmax(0, 1fr); }
+  .upload-layout, .review, .reference-list li { grid-template-columns: minmax(0, 1fr); }
+  .reference-status { justify-self: start; }
   .pipeline { flex-wrap: wrap; }
   .signin { padding: 24px 16px; }
   .signin-shell { grid-template-columns: 1fr; gap: 28px; }
