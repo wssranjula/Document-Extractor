@@ -1,3 +1,5 @@
+/** Calls to the document-check API. The token is kept in local storage. */
+
 const TOKEN_KEY = "formulary_token";
 
 export function getToken() {

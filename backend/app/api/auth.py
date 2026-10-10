@@ -1,3 +1,5 @@
+"""Sign-up, sign-in, and who is currently logged in."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 

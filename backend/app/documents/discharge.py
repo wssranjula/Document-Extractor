@@ -1,3 +1,9 @@
+"""Read the discharge into pages.
+
+Word files can also contain a medication table. When they do, we read the
+cells directly so dose, route, and frequency are not lost.
+"""
+
 import re
 from pathlib import Path
 
@@ -36,6 +42,10 @@ def medications_in_tables(path: Path) -> list[dict]:
             continue
         medications.extend(_medications_from_table(block, page_number))
     return medications
+
+
+def format_pages(pages: list[dict]) -> str:
+    return "\n\n".join(f"[page {page['number']}]\n{page['text']}" for page in pages)
 
 
 def _read_pdf(path: Path) -> list[dict]:
@@ -167,7 +177,3 @@ def _page_breaks(paragraph) -> int:
         elif element.tag == qn("w:br") and element.get(qn("w:type")) == "page":
             count += 1
     return count
-
-
-def format_pages(pages: list[dict]) -> str:
-    return "\n\n".join(f"[page {page['number']}]\n{page['text']}" for page in pages)

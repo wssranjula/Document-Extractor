@@ -1,6 +1,6 @@
 from app.db import SessionLocal
 from app.models import Chunk, Medication, Reference
-from app.pipeline.retrieve import passages_for_medication
+from app.retrieval import passages_for_medication
 
 
 def _reference_with_monographs() -> tuple[str, str]:
@@ -30,7 +30,7 @@ def test_punctuation_variant_uses_the_named_monograph_without_vectors(client, mo
     def fail_embed(_texts):
         raise AssertionError("vector search should not run for a title match")
 
-    monkeypatch.setattr("app.pipeline.retrieve.embed_texts", fail_embed)
+    monkeypatch.setattr("app.retrieval.embed_texts", fail_embed)
     reference_id, medication_id = _reference_with_monographs()
     with SessionLocal() as session:
         medication = session.get(Medication, medication_id)
@@ -43,7 +43,7 @@ def test_unknown_drug_name_does_not_match_a_similar_monograph(client, monkeypatc
     def fail_embed(_texts):
         raise AssertionError("a short unknown drug name must not use semantic fallback")
 
-    monkeypatch.setattr("app.pipeline.retrieve.embed_texts", fail_embed)
+    monkeypatch.setattr("app.retrieval.embed_texts", fail_embed)
     reference_id, medication_id = _reference_with_monographs()
     with SessionLocal() as session:
         medication = session.get(Medication, medication_id)
@@ -57,7 +57,7 @@ def test_one_character_typo_uses_the_named_monograph(client, monkeypatch):
     def fail_embed(_texts):
         raise AssertionError("a one-character title typo should not use vector search")
 
-    monkeypatch.setattr("app.pipeline.retrieve.embed_texts", fail_embed)
+    monkeypatch.setattr("app.retrieval.embed_texts", fail_embed)
     reference_id, medication_id = _reference_with_monographs()
     with SessionLocal() as session:
         medication = session.get(Medication, medication_id)

@@ -4,8 +4,8 @@ from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.models import STAGE_NAMES, Document, Job, JobStage, Reference, User
-from app.pipeline.nodes import build_nodes
-from app.pipeline.recovery import STALE_ERROR, fail_running_job, fail_stale_jobs
+from app.workflow.recovery import STALE_ERROR, fail_running_job, fail_stale_jobs
+from app.workflow.steps import build_nodes
 from tests.test_authz import _reference_id, _signup
 
 

@@ -1,3 +1,9 @@
+"""The JSON the browser sends and receives.
+
+These are not the database tables. A job response lists its stages.
+A result holds the summary, critical points, and medication flags.
+"""
+
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field

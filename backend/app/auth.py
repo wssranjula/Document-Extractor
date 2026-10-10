@@ -1,3 +1,9 @@
+"""Sign-in helpers.
+
+Passwords are stored as hashes. After login the browser keeps a token and
+sends it back on later requests. The token's subject is the user id.
+"""
+
 from datetime import datetime, timedelta, timezone
 
 import bcrypt

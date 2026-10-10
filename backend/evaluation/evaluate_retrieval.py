@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.models import Medication, Reference
-from app.pipeline.retrieve import passages_for_medication
+from app.retrieval import passages_for_medication
 
 GOLDEN_PATH = Path(__file__).with_name("retrieval_golden.json")
 

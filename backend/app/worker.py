@@ -1,3 +1,10 @@
+"""Claim queued discharge checks and run the workflow.
+
+A background thread refreshes heartbeat_at about every 5 seconds. Recovery
+treats a running job as abandoned when that timestamp is older than 45 seconds.
+On startup, jobs left running by a previous process are queued again.
+"""
+
 import logging
 import threading
 import time
@@ -9,10 +16,10 @@ from app.db import SessionLocal
 from app.logging_config import configure_logging
 from app.migrate import upgrade_db
 from app.models import Job, JobStage, Medication
-from app.pipeline.graph import build_graph
-from app.pipeline.recovery import fail_running_job
-from app.pipeline.stages import utcnow
-from app.pipeline.tracing import configure_tracing
+from app.workflow.graph import build_graph
+from app.workflow.recovery import fail_running_job
+from app.workflow.stage_status import utcnow
+from app.workflow.tracing import configure_tracing
 
 logger = logging.getLogger("app.worker")
 POLL_SECONDS = 0.5
@@ -20,6 +27,7 @@ HEARTBEAT_SECONDS = 5
 
 
 def claim_job(session: Session) -> Job | None:
+    # Another worker may be claiming a job at the same time, so skip rows it has locked.
     job = session.scalar(
         select(Job).where(Job.status == "queued").order_by(Job.created_at).limit(1).with_for_update(skip_locked=True)
     )
@@ -80,6 +88,7 @@ def run_job(job_id: str) -> None:
 
 
 def _heartbeat(job_id: str, stop: threading.Event) -> None:
+    # While this timestamp stays fresh, the job stays running. After 45 quiet seconds, a status read fails it.
     while not stop.wait(HEARTBEAT_SECONDS):
         try:
             with SessionLocal() as session:
@@ -114,6 +123,7 @@ def main() -> None:
     with SessionLocal() as session:
         requeue_orphaned(session)
     while True:
+        # Take the oldest queued job, run every stage, then look for the next one.
         with SessionLocal() as session:
             job = claim_job(session)
             job_id = job.id if job is not None else None

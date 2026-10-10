@@ -1,3 +1,11 @@
+"""Fail a check when its worker has stopped reporting.
+
+The worker writes heartbeat_at about every 5 seconds. A running job whose
+last heartbeat (or start time) is older than 45 seconds is marked failed
+on the next status read. That failure wins: a stage that finishes later
+does not mark the job succeeded.
+"""
+
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -5,9 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Job
-from app.pipeline.stages import utcnow
+from app.workflow.stage_status import utcnow
 
-logger = logging.getLogger("app.pipeline")
+logger = logging.getLogger("app.workflow")
 
 STALE_AFTER = timedelta(seconds=45)
 STALE_ERROR = "The worker stopped before this check finished. Submit the document again."

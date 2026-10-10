@@ -1,3 +1,8 @@
+"""The web API. It accepts uploads and reports progress.
+
+The check itself runs in a separate worker process.
+"""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.logging_config import configure_logging
 from app.migrate import upgrade_db
-from app.routers import auth, jobs, references
+from app.api import auth, jobs, references
 
 
 @asynccontextmanager

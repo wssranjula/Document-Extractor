@@ -1,6 +1,8 @@
-import { useState } from "react";
+/** Upload a DOCX formulary. The server rejects a file that has no Heading 2 monographs. */
+
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { createReference } from "../api";
+import { createReference, listReferences } from "../api/client";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
@@ -12,6 +14,14 @@ export function ReferenceUploadPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(null);
   const [error, setError] = useState("");
+  const [references, setReferences] = useState(null);
+  const [listError, setListError] = useState("");
+
+  useEffect(() => {
+    listReferences()
+      .then(setReferences)
+      .catch((err) => setListError(err.message));
+  }, []);
 
   function chooseFile(next) {
     setError("");
@@ -47,6 +57,10 @@ export function ReferenceUploadPage() {
     try {
       const reference = await createReference(name.trim(), file);
       setSaved(reference);
+      setReferences((current) => [
+        reference,
+        ...(current || []).filter((item) => item.id !== reference.id),
+      ]);
     } catch (err) {
       setError(err.message);
       setSaving(false);
@@ -82,6 +96,7 @@ export function ReferenceUploadPage() {
             Use this formulary
           </button>
         </div>
+        <ReferenceList references={references} error={listError} />
       </section>
     );
   }
@@ -134,6 +149,39 @@ export function ReferenceUploadPage() {
           {saving ? "Adding formulary…" : "Add formulary"}
         </button>
       </form>
+      <ReferenceList references={references} error={listError} />
+    </section>
+  );
+}
+
+function ReferenceList({ references, error }) {
+  return (
+    <section className="reference-list">
+      <div className="section-title">
+        <div>
+          <h2>Uploaded formularies</h2>
+          <p className="hint">Files become ready after their first document check builds the search index.</p>
+        </div>
+        {references ? <span className="count-badge">{references.length}</span> : null}
+      </div>
+      {error ? <p className="banner error">{error}</p> : null}
+      {references === null && !error ? <p className="hint">Loading uploaded files…</p> : null}
+      {references?.length === 0 ? <p className="banner empty">No formularies have been uploaded yet.</p> : null}
+      {references?.length ? (
+        <ul>
+          {references.map((reference) => (
+            <li key={reference.id} className="card">
+              <div>
+                <strong>{reference.name}</strong>
+                <span>{reference.filename}</span>
+              </div>
+              <span className={`reference-status ${reference.indexed ? "ready" : "waiting"}`}>
+                {reference.indexed ? "Ready" : "Not indexed yet"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }

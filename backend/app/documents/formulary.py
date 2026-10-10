@@ -1,3 +1,9 @@
+"""Split a formulary Word file into one chunk per drug.
+
+Each Heading 2 is a drug monograph. The quick-reference section is kept as
+its own chunk. Other headings are only titles, so they are not stored.
+"""
+
 from pathlib import Path
 
 from docx import Document

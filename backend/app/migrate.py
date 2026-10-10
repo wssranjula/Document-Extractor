@@ -1,3 +1,5 @@
+"""Apply database migrations on startup, retrying while Postgres is still starting."""
+
 import os
 import time
 

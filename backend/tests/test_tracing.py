@@ -1,7 +1,7 @@
 import os
 
 from app.config import settings
-from app.pipeline.tracing import configure_tracing
+from app.workflow.tracing import configure_tracing
 
 
 def test_tracing_stays_off_without_a_key(monkeypatch):
@@ -9,7 +9,7 @@ def test_tracing_stays_off_without_a_key(monkeypatch):
     monkeypatch.setenv("LANGCHAIN_TRACING_V2", "false")
     monkeypatch.setattr(settings, "langsmith_tracing", True)
     monkeypatch.setattr(settings, "langsmith_api_key", "")
-    monkeypatch.setattr("app.pipeline.tracing._configured", False)
+    monkeypatch.setattr("app.workflow.tracing._configured", False)
 
     assert configure_tracing() is False
     assert os.environ["LANGSMITH_TRACING"] == "false"
@@ -31,7 +31,7 @@ def test_tracing_uses_the_project_name(monkeypatch):
     monkeypatch.setattr(settings, "langsmith_api_key", "lsv2-test")
     monkeypatch.setattr(settings, "langsmith_project", "formulary-check")
     monkeypatch.setattr(settings, "langsmith_endpoint", "https://api.smith.langchain.com")
-    monkeypatch.setattr("app.pipeline.tracing._configured", False)
+    monkeypatch.setattr("app.workflow.tracing._configured", False)
 
     assert configure_tracing() is True
     assert os.environ["LANGSMITH_TRACING"] == "true"

@@ -1,3 +1,8 @@
+"""Where uploaded files are saved.
+
+Each file is stored under data/uploads and named with its document or formulary id.
+"""
+
 from pathlib import Path
 
 from app.config import settings

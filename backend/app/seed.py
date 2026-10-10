@@ -1,3 +1,8 @@
+"""Create the demo reviewer and copy the sample formulary into the upload folder.
+
+Run with: python -m app.seed
+"""
+
 import os
 import shutil
 from pathlib import Path

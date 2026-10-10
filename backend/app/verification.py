@@ -1,3 +1,10 @@
+"""Rules applied after the model gives a verdict.
+
+A quote is kept only when it actually appears in the formulary text we retrieved.
+An open-ended duration, such as "continue indefinitely", is not treated as a
+problem unless the monograph itself states a duration limit.
+"""
+
 from dataclasses import dataclass
 import re
 

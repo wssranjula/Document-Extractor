@@ -1,3 +1,5 @@
+"""Settings read from the .env file at the repository root."""
+
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict

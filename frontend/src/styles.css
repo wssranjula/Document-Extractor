@@ -179,6 +179,22 @@ form.card { display: grid; gap: 14px; }
 .saved-reference h2 { margin: 0; }
 .saved-reference .banner { margin: 0; }
 
+.reference-list { margin-top: 28px; }
+.reference-list ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.reference-list li { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.reference-list li > div { min-width: 0; display: grid; gap: 2px; }
+.reference-list li strong, .reference-list li span { overflow-wrap: anywhere; }
+.reference-list li > div span { color: #65717d; font-size: 0.88rem; }
+.reference-status {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.reference-status.ready { background: #e5f6ea; color: #146c36; }
+.reference-status.waiting { background: #fff4d6; color: #8a5a2a; }
+
 .dropzone {
   border: 1.5px dashed #0c5c5c;
   border-radius: 12px;

@@ -54,6 +54,21 @@ cd backend
 pytest
 ```
 
+## Code layout
+
+```text
+backend/app/api/            HTTP routes
+backend/app/workflow/       LangGraph stages, in STAGE_NAMES order
+backend/app/documents/      discharge reading and formulary splitting
+backend/app/retrieval.py    monograph lookup, then vector search
+backend/app/verification.py citation and duration rules
+backend/app/llm.py          chat and embeddings
+frontend/src/pages/         screens
+frontend/src/components/    shared stage list and document view
+```
+
+The stage ids stored on a job stay `parsed`, `chunked`, `embedded`, `summarized`, `key_points`, `entities`, `verified`, and `done`.
+
 ## What happens to a document
 
 `POST /jobs` stores the file and writes the document, job, and eight stage rows in one database transaction. The response is the job id. The request does not wait for the model.

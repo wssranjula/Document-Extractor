@@ -1,15 +1,15 @@
+"""Chat and embedding calls.
+
+The classes below are the answers we ask the model to fill in: a summary,
+critical points, medications, or a verdict. Looking up formulary text
+happens in retrieval.py.
+"""
+
 from openai import OpenAI
 from pydantic import BaseModel, Field
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import Chunk
-from app.pipeline.tracing import configure_tracing
-from app.pipeline.verify import Passage
-
-TOP_K = 4
-MAX_COSINE_DISTANCE = 0.55
+from app.workflow.tracing import configure_tracing
 
 
 class SummaryResult(BaseModel):
@@ -60,7 +60,8 @@ def _client() -> OpenAI:
     return wrap_openai(client)
 
 
-def complete(system: str, user: str, schema: type[BaseModel]) -> BaseModel:
+def structured_completion(system: str, user: str, schema: type[BaseModel]) -> BaseModel:
+    """Ask the chat model for one object matching `schema`."""
     from langsmith import trace
 
     with trace(name=schema.__name__, run_type="chain"):
@@ -88,19 +89,3 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
         response = _client().embeddings.create(model=settings.openai_embedding_model, input=texts)
     ordered = sorted(response.data, key=lambda item: item.index)
     return [item.embedding for item in ordered]
-
-
-def search_passages(session: Session, reference_id: str, vector: list[float]) -> list[Passage]:
-    distance = Chunk.embedding.cosine_distance(vector)
-    rows = session.execute(
-        select(Chunk, distance.label("distance"))
-        .where(Chunk.reference_id == reference_id, Chunk.embedding.is_not(None))
-        .order_by(distance)
-        .limit(TOP_K)
-    ).all()
-    passages = []
-    for chunk, score in rows:
-        if score is None or score > MAX_COSINE_DISTANCE:
-            continue
-        passages.append(Passage(section=chunk.section, page=chunk.page, content=chunk.content))
-    return passages

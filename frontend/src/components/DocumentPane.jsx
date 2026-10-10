@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { renderAsync } from "docx-preview";
-import { fetchFile } from "./api";
+import { fetchFile } from "../api/client";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
+
+// The original discharge, shown beside the findings. PDFs and Word files render differently.
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",

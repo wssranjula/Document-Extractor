@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
-import { getToken, setToken, signIn, signUp } from "../api";
+import { getToken, setToken, signIn, signUp } from "../api/client";
+
+// Sign in or create an account, then keep the token and go to the upload page.
 
 export function SignInPage() {
   const [mode, setMode] = useState("signin");

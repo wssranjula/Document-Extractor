@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { listJobs, listReferences, createJob } from "../api";
-import { acceptingStages, forgetPendingCheck, loadPendingCheck, rememberPendingCheck } from "../Pipeline";
+import { listJobs, listReferences, createJob } from "../api/client";
+import { acceptingStages, forgetPendingCheck, loadPendingCheck, rememberPendingCheck } from "../pendingCheck";
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
@@ -67,6 +67,7 @@ export function UploadPage() {
     const pending = { id: "pending", filename, status: "queued", stages };
     rememberPendingCheck(pending);
     setPendingCheck(pending);
+    // Open the check page now. The real job id arrives when the upload finishes.
     navigate("/jobs/pending", { state: pending });
     createJob(selectedFile, selectedReference)
       .then((job) => {

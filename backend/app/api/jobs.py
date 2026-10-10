@@ -1,3 +1,10 @@
+"""HTTP routes for a discharge check.
+
+Creating a job writes the file, the document, the job, and eight stage rows
+in one transaction. If that transaction rolls back, the saved file is deleted.
+Reading a job first fails any check whose worker heartbeat is stale.
+"""
+
 import asyncio
 import json
 from pathlib import Path
@@ -20,13 +27,14 @@ from app.schemas import (
     MedicationOut,
     StageOut,
 )
-from app.pipeline.recovery import fail_stale_jobs
 from app.storage import ALLOWED_EXTENSIONS, MAX_UPLOAD_BYTES, delete_file, save_upload
+from app.workflow.recovery import fail_stale_jobs
 
 router = APIRouter()
 
 
 def get_owned_job(session: Session, job_id: str, user_id: str) -> Job:
+    # A crashed worker can leave a job looking running. This makes that visible on the next read.
     fail_stale_jobs(session)
     job = session.scalar(
         select(Job)
@@ -65,13 +73,42 @@ def to_job_out(job: Job) -> JobOut:
     )
 
 
-@router.post("", response_model=JobCreated, status_code=201)
-def create_job(
-    reference_id: str = Form(...),
-    file: UploadFile = File(...),
-    user: User = Depends(get_current_user),
-    session: Session = Depends(get_db),
-) -> JobCreated:
+def build_job_result(job: Job) -> JobResult:
+    medications = []
+    for medication in job.medications:
+        flag = None
+        if medication.flag is not None:
+            citation = None
+            if medication.flag.citation_quote:
+                citation = CitationOut(
+                    quote=medication.flag.citation_quote,
+                    section=medication.flag.citation_section,
+                    page=medication.flag.citation_page,
+                )
+            flag = FlagOut(status=medication.flag.status, explanation=medication.flag.explanation, citation=citation)
+        medications.append(
+            MedicationOut(
+                id=medication.id,
+                drug_name=medication.drug_name,
+                dose=medication.dose,
+                unit=medication.unit,
+                route=medication.route,
+                frequency=medication.frequency,
+                duration=medication.duration,
+                indication=medication.indication,
+                source_page=medication.source_page,
+                flag=flag,
+            )
+        )
+    return JobResult(
+        job_id=job.id,
+        summary=job.summary,
+        critical_points=[CriticalPointOut(**point) for point in job.critical_point_list()],
+        medications=medications,
+    )
+
+
+def queue_discharge_check(session: Session, user: User, reference_id: str, file: UploadFile) -> Job:
     if not file.filename:
         raise HTTPException(status_code=422, detail="Upload a PDF or DOCX file")
     suffix = Path(file.filename).suffix.lower()
@@ -107,9 +144,21 @@ def create_job(
         session.commit()
     except Exception:
         session.rollback()
+        # The database change was undone, so remove the file that was already written.
         if path is not None:
             delete_file(path)
         raise
+    return job
+
+
+@router.post("", response_model=JobCreated, status_code=201)
+def create_job(
+    reference_id: str = Form(...),
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_db),
+) -> JobCreated:
+    job = queue_discharge_check(session, user, reference_id, file)
     return JobCreated(job_id=job.id, status=job.status)
 
 
@@ -117,7 +166,10 @@ def create_job(
 def list_jobs(user: User = Depends(get_current_user), session: Session = Depends(get_db)) -> list[JobOut]:
     fail_stale_jobs(session)
     jobs = session.scalars(
-        select(Job).where(Job.user_id == user.id).options(selectinload(Job.stages), selectinload(Job.document)).order_by(Job.created_at.desc())
+        select(Job)
+        .where(Job.user_id == user.id)
+        .options(selectinload(Job.stages), selectinload(Job.document))
+        .order_by(Job.created_at.desc())
     ).all()
     return [to_job_out(job) for job in jobs]
 
@@ -131,7 +183,7 @@ def get_job(job_id: str, user: User = Depends(get_current_user), session: Sessio
 async def job_events(job_id: str, user: User = Depends(get_current_user), session: Session = Depends(get_db)):
     get_owned_job(session, job_id, user.id)
     return StreamingResponse(
-        _event_stream(job_id, user.id),
+        stream_job_events(job_id, user.id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -139,39 +191,7 @@ async def job_events(job_id: str, user: User = Depends(get_current_user), sessio
 
 @router.get("/{job_id}/result", response_model=JobResult)
 def job_result(job_id: str, user: User = Depends(get_current_user), session: Session = Depends(get_db)) -> JobResult:
-    job = get_owned_job(session, job_id, user.id)
-    medications = []
-    for medication in job.medications:
-        flag = None
-        if medication.flag is not None:
-            citation = None
-            if medication.flag.citation_quote:
-                citation = CitationOut(
-                    quote=medication.flag.citation_quote,
-                    section=medication.flag.citation_section,
-                    page=medication.flag.citation_page,
-                )
-            flag = FlagOut(status=medication.flag.status, explanation=medication.flag.explanation, citation=citation)
-        medications.append(
-            MedicationOut(
-                id=medication.id,
-                drug_name=medication.drug_name,
-                dose=medication.dose,
-                unit=medication.unit,
-                route=medication.route,
-                frequency=medication.frequency,
-                duration=medication.duration,
-                indication=medication.indication,
-                source_page=medication.source_page,
-                flag=flag,
-            )
-        )
-    return JobResult(
-        job_id=job.id,
-        summary=job.summary,
-        critical_points=[CriticalPointOut(**point) for point in job.critical_point_list()],
-        medications=medications,
-    )
+    return build_job_result(get_owned_job(session, job_id, user.id))
 
 
 @router.get("/{job_id}/file")
@@ -183,13 +203,16 @@ def job_file(job_id: str, user: User = Depends(get_current_user), session: Sessi
     return FileResponse(path, media_type=job.document.content_type, filename=job.document.filename)
 
 
-async def _event_stream(job_id: str, user_id: str):
+async def stream_job_events(job_id: str, user_id: str):
+    """Poll the job until it succeeds or fails, and send each change to the browser."""
     last_payload = None
     ticks = 0
     while True:
         with SessionLocal() as session:
             fail_stale_jobs(session)
-            job = session.scalar(select(Job).where(Job.id == job_id, Job.user_id == user_id).options(selectinload(Job.stages)))
+            job = session.scalar(
+                select(Job).where(Job.id == job_id, Job.user_id == user_id).options(selectinload(Job.stages))
+            )
             if job is None:
                 yield _sse("failed", {"job_id": job_id, "status": "failed"})
                 return

@@ -1,3 +1,5 @@
+"""Write logs as one JSON line, including the job id and stage when a check is running."""
+
 import json
 import logging
 from datetime import datetime, timezone

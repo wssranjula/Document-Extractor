@@ -1,9 +1,15 @@
+"""Turn LangSmith on only when a key is present.
+
+LangGraph and the OpenAI wrapper both read these environment variables.
+An empty key disables tracing so a missing account does not fail the job.
+"""
+
 import logging
 import os
 
 from app.config import settings
 
-logger = logging.getLogger("app.pipeline")
+logger = logging.getLogger("app.workflow")
 
 _configured = False
 

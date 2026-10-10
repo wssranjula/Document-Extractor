@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { getJob, getResult, streamJob } from "../api";
-import { DocumentPane } from "../DocumentPane";
-import { OPTIMISTIC_STAGES, completedStages, loadPendingCheck, Pipeline } from "../Pipeline";
+import { getJob, getResult, streamJob } from "../api/client";
+import { DocumentPane } from "../components/DocumentPane";
+import { OPTIMISTIC_STAGES, completedStages, Pipeline } from "../components/Pipeline";
+import { loadPendingCheck } from "../pendingCheck";
 
 export function JobPage() {
   const { jobId } = useParams();
   const location = useLocation();
+  // "pending" is the gap between clicking Check and receiving a job id.
   const pending = jobId === "pending" ? location.state || loadPendingCheck() : null;
   const [job, setJob] = useState(null);
   const [result, setResult] = useState(null);
@@ -26,6 +28,7 @@ export function JobPage() {
         setJob(current);
         if (current.status === "succeeded") return getResult(jobId).then((value) => !cancelled && setResult(value));
         if (current.status === "failed") return undefined;
+        // Keep asking the server for stage updates until the check finishes.
         return streamJob(
           jobId,
           (event, data) => {

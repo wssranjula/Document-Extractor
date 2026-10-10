@@ -1,3 +1,11 @@
+"""The tables for one discharge check.
+
+A reviewer uploads a discharge against a formulary. That upload becomes a job
+with eight stages. The job stores a summary, critical points, the medications
+found in the discharge, and one flag per medication. The formulary itself is
+split into chunks.
+"""
+
 import json
 import uuid
 from datetime import datetime
@@ -9,6 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.config import settings
 from app.db import Base
 
+# The worker runs these names in this order. Creating a job writes one row for each.
 STAGE_NAMES = [
     "parsed",
     "chunked",
@@ -26,6 +35,8 @@ def new_id() -> str:
 
 
 class User(Base):
+    """A reviewer who can sign in and upload documents."""
+
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -35,6 +46,8 @@ class User(Base):
 
 
 class Reference(Base):
+    """A formulary file. indexed_at is set once its chunks have been embedded."""
+
     __tablename__ = "references"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -45,6 +58,8 @@ class Reference(Base):
 
 
 class Document(Base):
+    """The discharge summary a reviewer uploaded, and which formulary to check it against."""
+
     __tablename__ = "documents"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -59,6 +74,8 @@ class Document(Base):
 
 
 class Job(Base):
+    """One check. The screen follows status: queued, running, succeeded, or failed."""
+
     __tablename__ = "jobs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -87,6 +104,8 @@ class Job(Base):
 
 
 class JobStage(Base):
+    """One of the eight steps. The screen reads these rows, not the graph itself."""
+
     __tablename__ = "job_stages"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -100,6 +119,8 @@ class JobStage(Base):
 
 
 class Chunk(Base):
+    """One section of a formulary, usually a single drug monograph, plus its embedding."""
+
     __tablename__ = "chunks"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -114,6 +135,8 @@ class Chunk(Base):
 
 
 class Medication(Base):
+    """A prescription taken from the discharge."""
+
     __tablename__ = "medications"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -131,6 +154,8 @@ class Medication(Base):
 
 
 class Flag(Base):
+    """Whether that prescription agrees with the formulary, and the quote used as evidence."""
+
     __tablename__ = "flags"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

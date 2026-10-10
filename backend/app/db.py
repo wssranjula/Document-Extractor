@@ -1,3 +1,9 @@
+"""Database sessions.
+
+Each API request gets its own session and closes it when the request ends.
+The worker opens separate sessions for the heartbeat and the check.
+"""
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 

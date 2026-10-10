@@ -1,5 +1,5 @@
 from app.config import REPO_ROOT
-from app.pipeline.chunking import chunk_reference
+from app.documents.formulary import chunk_reference
 
 
 def test_reference_chunks_follow_monographs():

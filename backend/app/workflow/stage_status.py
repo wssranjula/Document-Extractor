@@ -1,3 +1,9 @@
+"""Updates the stage row the screen is watching.
+
+A step marks itself running, does its work, then marks itself finished.
+If the job was already failed because the worker went quiet, that failure stays.
+"""
+
 import logging
 from datetime import datetime, timezone
 
@@ -6,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Job, JobStage
 
-logger = logging.getLogger("app.pipeline")
+logger = logging.getLogger("app.workflow")
 _ERROR_LIMIT = 2000
 
 

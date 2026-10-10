@@ -2,7 +2,7 @@ from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.models import Document, Flag, Job, Medication, Reference, User
-from app.pipeline.verify import FlagDecision, Passage, remove_unsupported_duration_conflict, verify_one
+from app.verification import FlagDecision, Passage, remove_unsupported_duration_conflict, verify_one
 
 QUOTE = "Maximum dose: 40 mg orally once daily."
 PASSAGE = Passage(

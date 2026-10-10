@@ -1,5 +1,5 @@
 from app.config import REPO_ROOT
-from app.pipeline.parse import format_pages, medications_in_tables, read_document
+from app.documents.discharge import format_pages, medications_in_tables, read_document
 
 
 def test_discharge_table_is_included_in_the_parsed_text():
